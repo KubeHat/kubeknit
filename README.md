@@ -1,9 +1,9 @@
 # kubeknit
 
-![Latest GitHub release](https://img.shields.io/github/release/OWNER/kubeknit.svg)
-![GitHub workflow status](https://img.shields.io/github/actions/workflow/status/OWNER/kubeknit/ci.yml)
+![Latest GitHub release](https://img.shields.io/github/release/KubeHat/kubeknit.svg)
+![GitHub workflow status](https://img.shields.io/github/actions/workflow/status/KubeHat/kubeknit/ci.yml)
 ![Written in Bash](https://img.shields.io/badge/written%20in-bash-19bb19.svg)
-<!--![GitHub stars](https://img.shields.io/github/stars/OWNER/kubeknit.svg?label=github%20stars)-->
+<!--![GitHub stars](https://img.shields.io/github/stars/KubeHat/kubeknit.svg?label=github%20stars)-->
 
 kubeknit helps to merge, split, import or delete kubeconfig files
 
@@ -93,7 +93,7 @@ When using the binaries for installation, also have a look at [USAGE](#Usage).
 
 #### OSX & Linux
 ```bash
-curl -Lo kubeknit https://github.com/OWNER/kubeknit/releases/latest/download/kubeknit \
+curl -Lo kubeknit https://github.com/KubeHat/kubeknit/releases/latest/download/kubeknit \
   && chmod +x kubeknit \
   && sudo mv -i kubeknit /usr/local/bin
 ```

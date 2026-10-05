@@ -5,7 +5,7 @@ metadata:
 spec:
   version: "{{ .TagName }}"
   platforms:
-    - {{addURIAndSha "https://github.com/OWNER/kubeknit/releases/download/{{ .TagName }}/bundle.tar.gz" .TagName | indent 6 }}
+    - {{addURIAndSha "https://github.com/KubeHat/kubeknit/releases/download/{{ .TagName }}/bundle.tar.gz" .TagName | indent 6 }}
       bin: kubeknit-krew
       files:
         - from: ./kubeknit-krew
@@ -18,7 +18,7 @@ spec:
             operator: In
             values: ["darwin", "linux"]
   shortDescription: Merge, split, import or delete kubeconfig files
-  homepage: https://github.com/OWNER/kubeknit
+  homepage: https://github.com/KubeHat/kubeknit
   description: |+2
 
       kubeknit helps to merge, split, import or delete kubeconfig files
@@ -31,4 +31,4 @@ spec:
         $ kubectl kubeknit merge kubeconfig1 kubeconfig2 > merged
         $ kubectl kubeknit export ctx1 ctx2 -k k8s.yaml,k3s.yaml > extracted
 
-      More on https://github.com/OWNER/kubeknit/blob/master/doc/USAGE.md#kubeknit
+      More on https://github.com/KubeHat/kubeknit/blob/master/doc/USAGE.md#kubeknit
