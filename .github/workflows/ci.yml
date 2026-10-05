@@ -9,6 +9,8 @@ on:
     branches:
     - '*'
 
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -16,10 +18,10 @@ jobs:
     steps:
 
     - name: Check out repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Shellcheck
-      uses: ludeeus/action-shellcheck@master
+      uses: ludeeus/action-shellcheck@2.0.0
       env:
         SHELLCHECK_OPTS: -e SC2155
 
@@ -29,37 +31,24 @@ jobs:
          sudo apt-get update -qq
          sudo apt-get install -qq bats
          # To make 'no kubectl detected' test work, place kubectl in /usr/local/bin/
-         sudo curl -fsSL -o /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.21.3/bin/linux/amd64/kubectl
+         KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+         sudo curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
          sudo chmod +x /usr/local/bin/kubectl
+         kubectl version --client
          make test
 
     - name: Create assets
-      if: contains(github.ref, 'tags')
+      if: startsWith(github.ref, 'refs/tags/')
       run: make deploy
 
     - name: Create release
-      if: contains(github.ref, 'tags')
-      uses: actions/create-release@v1
-      env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
       with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-
-    - name: Upload assets
-      if: contains(github.ref, 'tags')
-      uses: svenstaro/upload-release-action@v1-release
-      with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: out/bundle.tar.gz*
-          tag: ${{ github.ref }}
-          overwrite: true
-          file_glob: true
+        files: out/bundle.tar.gz*
 
     - name: Create PR in krew-index
-      if: contains(github.ref, 'tags')
+      if: startsWith(github.ref, 'refs/tags/')
       uses: rajatjindal/krew-release-bot@v0.0.40
       with:
         krew_template_file: .konfig.yaml

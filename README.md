@@ -1,11 +1,11 @@
 # konfig
 
 ![Latest GitHub release](https://img.shields.io/github/release/corneliusweig/konfig.svg)
-![GitHub workflow status](https://img.shields.io/github/workflow/status/corneliusweig/konfig/konfig%20CI)
+![GitHub workflow status](https://img.shields.io/github/actions/workflow/status/corneliusweig/konfig/ci.yml)
 ![Written in Bash](https://img.shields.io/badge/written%20in-bash-19bb19.svg)
 <!--![GitHub stars](https://img.shields.io/github/stars/corneliusweig/konfig.svg?label=github%20stars)-->
 
-konfig helps to merge, split or import kubeconfig files
+konfig helps to merge, split, import or delete kubeconfig files
  
 ## Usage
 
@@ -13,17 +13,39 @@ konfig helps to merge, split or import kubeconfig files
 ```bash
 konfig import --save new-cfg
 ```
-Imports the config file `new-cfg` into the default kubeconfig at `~/.kube/config`.
+Imports the config file `new-cfg` into your kubeconfig. This is the first file in the `KUBECONFIG`
+environment variable, or `~/.kube/config` if `KUBECONFIG` is not set.
 To show the result without changing your kubeconfig, do
 ```bash
 konfig import new-cfg
 ```
+
+A kubeconfig can also be read from stdin:
+```bash
+clusterctl get kubeconfig my-cluster | konfig import --save -
+```
+
+If a cluster, user or context with the same name already exists in your kubeconfig, the existing one is kept
+and `konfig` prints a warning. Use `--force` to overwrite existing entries with the imported ones.
+Your current context is never changed by an import.
+
+By default, certificates are embedded into the result (flattened). Use `--preserve-structure` to keep
+references to certificate files. Relative certificate paths are then rewritten to absolute paths, so that
+they still work from your kubeconfig.
 
 CAVEAT: due to how shells work, the following will lose your current `~/.kube/config`
 ```bash
 # WRONG, don't do this!
 konfig import new-cfg > ~/.kube/config
 ```
+
+### Delete contexts
+```bash
+konfig delete --save my-context
+```
+Deletes the context `my-context` from your kubeconfig, together with its cluster and user,
+unless they are still used by another context. Use `--context-only` to keep the cluster and user.
+Without `--save`, the result is printed instead.
 
 ### Merge several kubeconfig files
 ```bash
@@ -40,6 +62,14 @@ konfig export minikube > minikube.config
 
 # extract context minikube and docker-for-desktop from two input configs
 konfig export minikube docker-for-desktop -k ~/.kube/other,~/dockercfg > local
+```
+
+### Shell completion
+```bash
+# bash, add to ~/.bashrc
+source <(konfig completion bash)
+# zsh, add to ~/.zshrc
+source <(konfig completion zsh)
 ```
 
 ## Installation

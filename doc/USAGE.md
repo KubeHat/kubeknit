@@ -1,7 +1,7 @@
 <!-- DO NOT MOVE THIS FILE, BECAUSE IT NEEDS A PERMANENT ADDRESS -->
 
 # konfig
-konfig helps to merge, split or import kubeconfig files
+konfig helps to merge, split, import or delete kubeconfig files
 
 ## Usage
 
@@ -14,17 +14,35 @@ kubectl krew install konfig
 ```bash
 kubectl konfig import --save new-cfg
 ```
-Imports the config file `new-cfg` into the default kubeconfig at `~/.kube/config`.
+Imports the config file `new-cfg` into your kubeconfig. This is the first file in the `KUBECONFIG`
+environment variable, or `~/.kube/config` if `KUBECONFIG` is not set.
 To show the result without changing your kubeconfig, do
 ```bash
 kubectl konfig import new-cfg
 ```
+
+A kubeconfig can also be read from stdin:
+```bash
+clusterctl get kubeconfig my-cluster | kubectl konfig import --save -
+```
+
+If a cluster, user or context with the same name already exists in your kubeconfig, the existing one is kept
+and `konfig` prints a warning. Use `--force` to overwrite existing entries with the imported ones.
+Your current context is never changed by an import.
 
 CAVEAT: due to how shells work, the following will lose your current `~/.kube/config`
 ```bash
 # WRONG, don't do this!
 kubectl konfig import new-cfg > ~/.kube/config
 ```
+
+### Delete contexts
+```bash
+kubectl konfig delete --save my-context
+```
+Deletes the context `my-context` from your kubeconfig, together with its cluster and user,
+unless they are still used by another context. Use `--context-only` to keep the cluster and user.
+Without `--save`, the result is printed instead.
 
 ### Merge several kubeconfig files
 ```bash

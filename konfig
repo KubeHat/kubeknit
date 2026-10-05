@@ -14,37 +14,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[[ -n $DEBUG ]] && set -x
+[[ -n ${DEBUG:-} ]] && set -x
 
 set -eEuo pipefail
 
-declare -a TMPFILES=()
+readonly KONFIG_VERSION="v0.1.0"
+
+# All temporary files live in this directory. It is created in $TMPDIR and
+# never in the current working directory, which may be read-only.
+WORKDIR=""
 cleanup() {
-  if [[ "${#TMPFILES[@]}" -gt 0 ]]; then
-    rm -- "${TMPFILES[@]}"
+  if [[ -n "$WORKDIR" ]]; then
+    rm -rf -- "$WORKDIR"
   fi
 }
 trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
-konfig helps to merge, split or import kubeconfig files
+konfig helps to merge, split, import or delete kubeconfig files
 
 USAGE:
   konfig merge [--preserve-structure,-p] <CONFIG>..
      Merge multiple kubeconfigs into one.
      -p  prevents flattening which will make the result less portable.
 
-  konfig import [--preserve-structure,-p] [--save,-s] [--stdin,-i] <CONFIG>..
-     Import the given configs into your current kubeconfig (respects KUBECONFIG env var).
-     -s  writes the result to your ~/.kube/config
-     -i  import kubeconfig string from stdin
+  konfig import [--preserve-structure,-p] [--save,-s] [--force,-f] [--stdin,-i] <CONFIG>..
+     Import the given configs into your kubeconfig. Your kubeconfig is the first
+     file in the KUBECONFIG env var, or ~/.kube/config if KUBECONFIG is unset.
+     -s  writes the result to your kubeconfig instead of printing it
+     -f  overwrites existing clusters, users and contexts with the same name
+     -i  import kubeconfig string from stdin (same as passing "-" as CONFIG)
+     -p  prevents flattening; relative certificate paths are made absolute
+
+  konfig delete [--save,-s] [--context-only,-c] <CONTEXT>..
+     Delete the given contexts from your kubeconfig. Clusters and users that are
+     no longer used by any remaining context are deleted as well.
+     -s  writes the result to your kubeconfig instead of printing it
+     -c  only deletes the contexts, but keeps their clusters and users
 
   konfig split  <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
   konfig export <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
      Export/split off a minimal kubeconfig with the given contexts
       -k  may be repeated or contain a comma-delimited list of input configs.
           When omitted, export from the default kubeconfig.
+
+  konfig completion (bash|zsh)
+     Print a shell completion script.
+
+  konfig version
+     Print the version of konfig.
 
 EXAMPLES:
   Merge new-cfg with your current kubeconfig
@@ -54,6 +73,9 @@ EXAMPLES:
   CAVEAT: due to how shells work, the following will lose your current ~/.kube/config
     WRONG $ konfig import new-cfg > ~/.kube/config
 
+  Remove context ctx1 together with its cluster and user from ~/.kube/config
+    $ konfig delete --save ctx1
+
   Export ctx1 and ctx2 into combined.yaml
     $ konfig export -k ~/.kube/config -k k3s.yaml ctx1 ctx2 > combined.yaml
 
@@ -62,113 +84,596 @@ EXAMPLES:
     or
     $ konfig merge -p ~/.kube/config k3s.yaml > merged-not-flattened
 
+  Enable shell completion
+    $ source <(konfig completion bash)
+
 EOF
 }
 
+completion() {
+  local shell="${1:-}"
+  case "$shell" in
+    bash) ;;
+    zsh)
+      echo 'autoload -U +X bashcompinit && bashcompinit'
+      ;;
+    '')
+      error "shell is missing, use \"completion bash\" or \"completion zsh\""
+      ;;
+    *)
+      error "unsupported shell \"$shell\", use \"bash\" or \"zsh\""
+      ;;
+  esac
+
+  # NOTE: use a delimiter other than EOF, so that the krew build does not
+  # rewrite the function names below.
+  cat <<'COMPLETION'
+_konfig_contexts() {
+  local i cfgs=""
+  for (( i = 2; i < COMP_CWORD; i++ )); do
+    if [[ "${COMP_WORDS[i]}" == '-k' || "${COMP_WORDS[i]}" == '--kubeconfig' ]]; then
+      cfgs="${cfgs:+$cfgs:}${COMP_WORDS[i+1]//,/:}"
+    fi
+  done
+  if [[ -n "$cfgs" ]]; then
+    KUBECONFIG="$cfgs" kubectl config get-contexts -o name 2>/dev/null
+  else
+    kubectl config get-contexts -o name 2>/dev/null
+  fi
+}
+
+_konfig() {
+  local cur prev cmd
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  COMPREPLY=()
+
+  if [[ "$COMP_CWORD" -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "import merge export split delete completion version help" -- "$cur") )
+    return
+  fi
+
+  cmd="${COMP_WORDS[1]}"
+  case "$cmd" in
+    import)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "--preserve-structure --save --force --stdin --help" -- "$cur") )
+      fi
+      ;;
+    merge)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "--preserve-structure --help" -- "$cur") )
+      fi
+      ;;
+    export|split)
+      if [[ "$prev" == '-k' || "$prev" == '--kubeconfig' ]]; then
+        return
+      elif [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "--kubeconfig --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "$(_konfig_contexts)" -- "$cur") )
+      fi
+      ;;
+    delete)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=( $(compgen -W "--save --context-only --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "$(_konfig_contexts)" -- "$cur") )
+      fi
+      ;;
+    completion)
+      COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+      ;;
+  esac
+}
+
+complete -o default -F _konfig konfig
+COMPLETION
+}
+
 error() {
-  echo "error: $1" >&2
+  echo "error: $*" >&2
   exit 1
 }
 
-merge() {
-    if [[ "$1" =~ ^-.+ && "$1" != '-p' && "$1" != '--preserve-structure' ]]; then
-      error "unrecognized flag \"$1\""
-    else
-      IFS=$':\n\t'
-      if [[ "$1" == '-p' || "$1" == '--preserve-structure' ]]; then
-        KUBECONFIG="${*:2}" $KUBECTL config view --raw --merge
-      else
-        KUBECONFIG="$*" $KUBECTL config view --flatten --merge
-      fi
-      IFS=$' \t\n'
+warn() {
+  echo "warning: $*" >&2
+}
+
+info() {
+  echo "$*" >&2
+}
+
+# join_by SEP ARG.. prints ARGs joined by SEP
+join_by() {
+  local IFS="$1"
+  shift
+  echo "$*"
+}
+
+init_workdir() {
+  WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/konfig.XXXXXX")" \
+    || error "cannot create a temporary directory, check TMPDIR"
+}
+
+# kubectl_out FILE ARG.. runs kubectl and writes its stdout to FILE.
+# The output is piped through cat, because sandboxed kubectl builds (e.g. snap)
+# may fail to write to a redirected stdout with
+# "error: write /dev/stdout: permission denied".
+kubectl_out() {
+  local out="$1"
+  shift
+  "$KUBECTL" "$@" | cat > "$out"
+}
+
+# kubectl_quiet ARG.. runs kubectl and only shows its output on errors
+kubectl_quiet() {
+  if ! "$KUBECTL" "$@" > "$WORKDIR/kubectl.log" 2>&1; then
+    cat "$WORKDIR/kubectl.log" >&2
+    exit 1
+  fi
+}
+
+# view_merged FILE MODE CONFIG.. merges CONFIGs into FILE. MODE is --raw or --flatten.
+view_merged() {
+  local out="$1" mode="$2"
+  shift 2
+  KUBECONFIG="$(join_by ':' "$@")" kubectl_out "$out" config view "$mode" --merge
+}
+
+# check_readable CONFIG.. fails unless all CONFIGs can be read.
+# kubectl silently ignores missing files, so this check must be explicit.
+check_readable() {
+  local f
+  for f in "$@"; do
+    if [[ -d "$f" ]]; then
+      error "\"$f\" is a directory, not a kubeconfig"
+    elif [[ ! -e "$f" ]]; then
+      error "kubeconfig \"$f\" does not exist"
+    elif [[ ! -r "$f" ]]; then
+      error "kubeconfig \"$f\" is not readable"
     fi
+  done
+}
+
+# target_kubeconfig prints the kubeconfig file which kubectl modifies:
+# the first entry of KUBECONFIG, or ~/.kube/config
+target_kubeconfig() {
+  local -a entries=()
+  local entry
+  if [[ -n "${KUBECONFIG:-}" ]]; then
+    IFS=':' read -r -a entries <<< "$KUBECONFIG"
+    for entry in ${entries[@]+"${entries[@]}"}; do
+      if [[ -n "$entry" ]]; then
+        echo "$entry"
+        return
+      fi
+    done
+  fi
+  echo "$HOME/.kube/config"
+}
+
+# save_to SRC DEST overwrites DEST with SRC. Writing in-place keeps symlinks and
+# file permissions intact. On failure, the original content is restored.
+save_to() {
+  local src="$1" dest="$2"
+  mkdir -p "$(dirname "$dest")" || error "cannot create directory for \"$dest\""
+  if [[ -e "$dest" ]]; then
+    cat "$dest" > "$WORKDIR/backup"
+  else
+    (umask 077 && : > "$dest") || error "cannot create \"$dest\""
+    : > "$WORKDIR/backup"
+  fi
+  if ! cat "$src" > "$dest"; then
+    cat "$WORKDIR/backup" > "$dest" || true
+    error "cannot write \"$dest\""
+  fi
+}
+
+# absolute_dir FILE prints the absolute directory which contains FILE
+absolute_dir() {
+  (cd "$(dirname "$1")" && pwd -P)
+}
+
+is_relative_path() {
+  [[ -n "$1" && "$1" != /* ]]
+}
+
+# absolutize_paths CONFIG DIR rewrites relative certificate paths in CONFIG, so
+# that they still resolve relative to DIR after CONFIG was moved elsewhere.
+absolutize_paths() {
+  local cfg="$1" dir="$2" name path
+  local paths="$WORKDIR/paths"
+
+  kubectl_out "$paths" --kubeconfig "$cfg" config view --raw \
+    -o 'jsonpath={range .clusters[*]}{.name}{"\t"}{.cluster.certificate-authority}{"\n"}{end}'
+  while IFS=$'\t' read -r name path; do
+    if is_relative_path "$path"; then
+      kubectl_quiet --kubeconfig "$cfg" config set-cluster "$name" --certificate-authority="$dir/$path"
+    fi
+  done < "$paths"
+
+  kubectl_out "$paths" --kubeconfig "$cfg" config view --raw \
+    -o 'jsonpath={range .users[*]}{.name}{"\t"}{.user.client-certificate}{"\n"}{end}'
+  while IFS=$'\t' read -r name path; do
+    if is_relative_path "$path"; then
+      kubectl_quiet --kubeconfig "$cfg" config set-credentials "$name" --client-certificate="$dir/$path"
+    fi
+  done < "$paths"
+
+  kubectl_out "$paths" --kubeconfig "$cfg" config view --raw \
+    -o 'jsonpath={range .users[*]}{.name}{"\t"}{.user.client-key}{"\n"}{end}'
+  while IFS=$'\t' read -r name path; do
+    if is_relative_path "$path"; then
+      kubectl_quiet --kubeconfig "$cfg" config set-credentials "$name" --client-key="$dir/$path"
+    fi
+  done < "$paths"
+}
+
+# list_entries CONFIG OUT writes one line "kind<TAB>name<TAB>data" per
+# cluster, user and context in CONFIG to OUT
+list_entries() {
+  kubectl_out "$2" --kubeconfig "$1" config view --raw -o 'jsonpath={range .clusters[*]}cluster{"\t"}{.name}{"\t"}{.cluster}{"\n"}{end}{range .users[*]}user{"\t"}{.name}{"\t"}{.user}{"\n"}{end}{range .contexts[*]}context{"\t"}{.name}{"\t"}{.context}{"\n"}{end}'
+}
+
+# report_conflicts BASE IMPORTED TARGET FORCE warns about entries which exist in
+# both BASE and IMPORTED with the same name, but with different data.
+report_conflicts() {
+  local base="$1" imported="$2" target="$3" force="$4" kind name
+
+  list_entries "$base" "$WORKDIR/base.entries"
+  list_entries "$imported" "$WORKDIR/import.entries"
+  awk -F'\t' '
+    NR == FNR { seen[$1 FS $2] = $3; next }
+    (($1 FS $2) in seen) && seen[$1 FS $2] != $3 { print $1 "\t" $2 }
+  ' "$WORKDIR/base.entries" "$WORKDIR/import.entries" > "$WORKDIR/conflicts"
+
+  while IFS=$'\t' read -r kind name; do
+    if [[ -n "$force" ]]; then
+      warn "overwriting $kind \"$name\" in $target"
+    else
+      warn "$kind \"$name\" already exists in $target with different settings, keeping the existing one (use --force to overwrite)"
+    fi
+  done < "$WORKDIR/conflicts"
+}
+
+merge() {
+  local mode="--flatten"
+  local -a cfgs=()
+
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -p | --preserve-structure)
+        mode="--raw"
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        cfgs+=( "$@" )
+        break
+        ;;
+      -?*)
+        error "unrecognized flag \"$1\""
+        ;;
+      *)
+        cfgs+=( "$1" )
+        ;;
+    esac
+    shift
+  done
+
+  if [[ "${#cfgs[@]}" -eq 0 ]]; then
+    error "kubeconfigs to merge are missing"
+  fi
+  check_readable "${cfgs[@]}"
+
+  init_workdir
+  view_merged "$WORKDIR/result" "$mode" "${cfgs[@]}"
+  cat "$WORKDIR/result"
 }
 
 import_ctx() {
-    declare -a tmpcfgs=()
-    local tmpcfg
-    local tmpinputcfg=""
-    local out=""
-    local arg=""
+  local mode="--flatten" save="" force="" use_stdin=""
+  local target base current_context i
+  local -a inputs=()
+  local -a prepared=()
 
-    tmpcfg=$(mktemp konfig_XXXXXX)
-    TMPFILES+=( "$tmpcfg" )
-    tmpcfgs+=( "$tmpcfg")
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -p | --preserve-structure)
+        mode="--raw"
+        ;;
+      -s | --save)
+        save=1
+        ;;
+      -f | --force)
+        force=1
+        ;;
+      -i | --stdin | -)
+        use_stdin=1
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        inputs+=( "$@" )
+        break
+        ;;
+      -?*)
+        error "unrecognized flag \"$1\""
+        ;;
+      *)
+        inputs+=( "$1" )
+        ;;
+    esac
+    shift
+  done
 
-    for OPT in "$@"; do
-      case $OPT in
-        -p | --preserve-structure)
-          arg="$1"
-          shift
-          ;;
-        -s | --save)
-          out="${XDG_CACHE_HOME:-$HOME/.kube}/config"
-          shift
-          ;;
-        -i | --stdin)
-          if [[ -p /dev/stdin ]]; then
-            tmpinputcfg=$(mktemp konfig_input_XXXXXX)
-            TMPFILES+=( "$tmpinputcfg" )
-            tmpcfgs+=( "$tmpinputcfg" )
-            cat - > "$tmpinputcfg"
-            shift
-          fi
-          ;;
-        -*)
-          error "unrecognized flag \"$1\""
-          ;;
-      esac
-    done
-    $KUBECTL config view --raw > "$tmpcfg"
+  if [[ -z "$use_stdin" && "${#inputs[@]}" -eq 0 ]]; then
+    error "kubeconfigs to import are missing"
+  fi
+  check_readable ${inputs[@]+"${inputs[@]}"}
 
-    if [[ -z "$out" ]]; then
-      merge "$arg" "${tmpcfgs[@]}" "$@"
-    else
-      trap 'mv "$tmpcfg" "$out"' ERR
-      merge "$arg" "${tmpcfgs[@]}" "$@" > "$out"
+  init_workdir
+  target="$(target_kubeconfig)"
+  if [[ -e "$target" ]]; then
+    check_readable "$target"
+    base="$target"
+  else
+    base="$WORKDIR/empty"
+    : > "$base"
+  fi
+
+  # Copy all inputs, so that they can be validated and modified safely.
+  if [[ -n "$use_stdin" ]]; then
+    if [[ -t 0 ]]; then
+      error "--stdin is given, but stdin is a terminal"
     fi
+    cat > "$WORKDIR/stdin"
+    if [[ ! -s "$WORKDIR/stdin" ]]; then
+      error "no kubeconfig received on stdin"
+    fi
+    prepared+=( "$WORKDIR/stdin" )
+  fi
+  for i in ${inputs[@]+"${inputs[@]}"}; do
+    cat -- "$i" > "$WORKDIR/input-${#prepared[@]}"
+    prepared+=( "$WORKDIR/input-${#prepared[@]}" )
+  done
+
+  for i in "${!prepared[@]}"; do
+    local cfg="${prepared[i]}" label dir
+    if [[ -n "$use_stdin" && "$i" -eq 0 ]]; then
+      label="<stdin>"
+      dir="$PWD"
+    else
+      label="${inputs[i - ${use_stdin:-0}]}"
+      dir="$(absolute_dir "$label")"
+    fi
+
+    if ! "$KUBECTL" config view --kubeconfig "$cfg" > /dev/null 2> "$WORKDIR/kubectl.log"; then
+      error "\"$label\" is not a valid kubeconfig: $(cat "$WORKDIR/kubectl.log")"
+    fi
+    absolutize_paths "$cfg" "$dir"
+    report_conflicts "$base" "$cfg" "$target" "$force"
+  done
+
+  # On name clashes, kubectl keeps the entry from the first file.
+  if [[ -n "$force" ]]; then
+    if ! view_merged "$WORKDIR/result" "$mode" "${prepared[@]}" "$base"; then
+      error "cannot merge kubeconfigs (if a certificate file is missing, try --preserve-structure)"
+    fi
+    # Do not let the imported configs change the active context.
+    kubectl_out "$WORKDIR/current-context" --kubeconfig "$base" config view -o 'jsonpath={.current-context}'
+    current_context="$(cat "$WORKDIR/current-context")"
+    if [[ -n "$current_context" ]]; then
+      kubectl_quiet --kubeconfig "$WORKDIR/result" config use-context "$current_context"
+    fi
+  else
+    if ! view_merged "$WORKDIR/result" "$mode" "$base" "${prepared[@]}"; then
+      error "cannot merge kubeconfigs (if a certificate file is missing, try --preserve-structure)"
+    fi
+  fi
+
+  if [[ -n "$save" ]]; then
+    save_to "$WORKDIR/result" "$target"
+    info "imported ${#prepared[@]} kubeconfig(s) into $target"
+  else
+    cat "$WORKDIR/result"
+  fi
+}
+
+delete_contexts() {
+  local save="" context_only="" target result ctx cluster user current_context
+  local -a ctxs=()
+  local -a clusters=()
+  local -a users=()
+
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -s | --save)
+        save=1
+        ;;
+      -c | --context-only)
+        context_only=1
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        ctxs+=( "$@" )
+        break
+        ;;
+      -?*)
+        error "unrecognized flag \"$1\""
+        ;;
+      *)
+        ctxs+=( "$1" )
+        ;;
+    esac
+    shift
+  done
+
+  if [[ "${#ctxs[@]}" -eq 0 ]]; then
+    error "contexts to delete are missing"
+  fi
+
+  init_workdir
+  target="$(target_kubeconfig)"
+  check_readable "$target"
+  result="$WORKDIR/result"
+  cat "$target" > "$result"
+
+  # one line "name<TAB>cluster<TAB>user" per context
+  kubectl_out "$WORKDIR/contexts" --kubeconfig "$result" config view --raw \
+    -o 'jsonpath={range .contexts[*]}{.name}{"\t"}{.context.cluster}{"\t"}{.context.user}{"\n"}{end}'
+
+  # Validate all contexts before changing anything.
+  for ctx in "${ctxs[@]}"; do
+    if ! NAME="$ctx" awk -F'\t' '$1 == ENVIRON["NAME"] { found = 1 } END { exit !found }' "$WORKDIR/contexts"; then
+      error "context \"$ctx\" not found in $target"
+    fi
+  done
+
+  kubectl_out "$WORKDIR/current-context" --kubeconfig "$result" config view -o 'jsonpath={.current-context}'
+  current_context="$(cat "$WORKDIR/current-context")"
+
+  for ctx in "${ctxs[@]}"; do
+    cluster="$(NAME="$ctx" awk -F'\t' '$1 == ENVIRON["NAME"] { print $2; exit }' "$WORKDIR/contexts")"
+    user="$(NAME="$ctx" awk -F'\t' '$1 == ENVIRON["NAME"] { print $3; exit }' "$WORKDIR/contexts")"
+    clusters+=( "$cluster" )
+    users+=( "$user" )
+
+    kubectl_quiet --kubeconfig "$result" config delete-context "$ctx"
+    info "deleted context \"$ctx\""
+    if [[ "$ctx" == "$current_context" ]]; then
+      kubectl_quiet --kubeconfig "$result" config unset current-context
+      warn "\"$ctx\" was the current context, select a new one with \"kubectl config use-context\""
+    fi
+  done
+
+  if [[ -z "$context_only" ]]; then
+    delete_orphans "$result" cluster ${clusters[@]+"${clusters[@]}"}
+    delete_orphans "$result" user ${users[@]+"${users[@]}"}
+  fi
+
+  if [[ -n "$save" ]]; then
+    save_to "$result" "$target"
+  else
+    cat "$result"
+  fi
+}
+
+# delete_orphans CONFIG KIND NAME.. deletes the clusters or users NAME from
+# CONFIG, unless they are still used by a context.
+delete_orphans() {
+  local cfg="$1" kind="$2" name column
+  shift 2
+  if [[ "$kind" == 'cluster' ]]; then
+    column=2
+  else
+    column=3
+  fi
+
+  kubectl_out "$WORKDIR/contexts" --kubeconfig "$cfg" config view --raw \
+    -o 'jsonpath={range .contexts[*]}{.name}{"\t"}{.context.cluster}{"\t"}{.context.user}{"\n"}{end}'
+  kubectl_out "$WORKDIR/names" --kubeconfig "$cfg" config view --raw \
+    -o "jsonpath={range .${kind}s[*]}{.name}{\"\\n\"}{end}"
+
+  for name in "$@"; do
+    if [[ -z "$name" ]] || ! grep -qxF -- "$name" "$WORKDIR/names"; then
+      continue
+    fi
+    if NAME="$name" awk -F'\t' -v col="$column" '$col == ENVIRON["NAME"] { found = 1 } END { exit !found }' "$WORKDIR/contexts"; then
+      continue
+    fi
+    if [[ "$kind" == 'cluster' ]]; then
+      kubectl_quiet --kubeconfig "$cfg" config delete-cluster "$name"
+    elif ! "$KUBECTL" --kubeconfig "$cfg" config delete-user "$name" > /dev/null 2>&1; then
+      # kubectl before v1.24 does not know "delete-user"
+      kubectl_quiet --kubeconfig "$cfg" config unset "users.$name"
+    fi
+    # do not delete the same entry twice
+    printf '%s\n' "$name" | grep -vxF -f - "$WORKDIR/names" > "$WORKDIR/names.new" || true
+    mv "$WORKDIR/names.new" "$WORKDIR/names"
+    info "deleted $kind \"$name\""
+  done
 }
 
 export_contexts() {
-    declare -a ctxs=()
-    declare -a cfgs=()
-    declare -a tmpcfgs=()
-    local tmpcfg
+  local ctx i
+  local -a ctxs=()
+  local -a cfgs=()
+  local -a tmpcfgs=()
 
-    while [[ "$#" -gt 0 ]]; do
-      if [[ "$1" == '--kubeconfig' || "$1" == '-k' ]]; then
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -k | --kubeconfig)
+        if [[ "$#" -lt 2 || -z "$2" ]]; then
+          error "flag \"$1\" requires a kubeconfig"
+        fi
         cfgs+=( "${2//,/:}" )
-        shift 2
-      elif [[ "$1" =~ ^-.+ ]]; then
-        error "unrecognized flag \"$1\""
-      else
-        ctxs+=( "$1" )
         shift
-      fi
-    done
+        ;;
+      --kubeconfig=*)
+        local cfg="${1#--kubeconfig=}"
+        cfgs+=( "${cfg//,/:}" )
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        ctxs+=( "$@" )
+        break
+        ;;
+      -?*)
+        error "unrecognized flag \"$1\""
+        ;;
+      *)
+        ctxs+=( "$1" )
+        ;;
+    esac
+    shift
+  done
 
-    if [[ "${#ctxs[@]}" -eq 0 ]]; then
-      error "contexts to export are missing"
+  if [[ "${#ctxs[@]}" -eq 0 ]]; then
+    error "contexts to export are missing"
+  fi
+  if [[ "${#cfgs[@]}" -gt 0 ]]; then
+    local -a files=()
+    IFS=':' read -r -a files <<< "$(join_by ':' "${cfgs[@]}")"
+    check_readable "${files[@]}"
+  fi
+
+  init_workdir
+  i=0
+  for ctx in "${ctxs[@]}"; do
+    tmpcfgs+=( "$WORKDIR/context-$i" )
+    if [[ "${#cfgs[@]}" -eq 0 ]]; then
+      kubectl_out "$WORKDIR/context-$i" config view --flatten --minify --context="$ctx"
+    else
+      KUBECONFIG="$(join_by ':' "${cfgs[@]}")" \
+        kubectl_out "$WORKDIR/context-$i" config view --flatten --minify --context="$ctx"
     fi
+    i=$((i + 1))
+  done
 
-    for x in "${ctxs[@]}"; do
-      tmpcfg=$(mktemp konfig_XXXXXX)
-      TMPFILES+=( "$tmpcfg" )
-      tmpcfgs+=( "$tmpcfg" )
-      if [[ "${#cfgs[@]}" -eq 0 ]]; then
-        $KUBECTL config view --flatten --minify --context="$x" > "$tmpcfg"
-      else
-        IFS=$':\n\t'
-        KUBECONFIG="${cfgs[*]}" $KUBECTL config view --flatten --minify --context="$x" > "$tmpcfg"
-        IFS=$' \n\t'
-      fi
-    done
-
-    merge "${tmpcfgs[@]}"
+  view_merged "$WORKDIR/result" --flatten "${tmpcfgs[@]}"
+  cat "$WORKDIR/result"
 }
 
 main() {
-  if hash kubectl 2>/dev/null; then
+  if [[ -n "${KONFIG_KUBECTL:-}" ]]; then
+    KUBECTL="$KONFIG_KUBECTL"
+  elif hash kubectl 2>/dev/null; then
     KUBECTL=kubectl
   elif hash kubectl.exe 2>/dev/null; then
     KUBECTL=kubectl.exe
@@ -186,6 +691,9 @@ main() {
   '-h' | '--help' | 'help')
     usage
     ;;
+  '-v' | '--version' | 'version')
+    echo "konfig $KONFIG_VERSION"
+    ;;
   'export'|'split')
     export_contexts "${@:2}"
     ;;
@@ -194,6 +702,12 @@ main() {
     ;;
   'merge')
     merge "${@:2}"
+    ;;
+  'delete')
+    delete_contexts "${@:2}"
+    ;;
+  'completion')
+    completion "${@:2}"
     ;;
    -*)
     usage
