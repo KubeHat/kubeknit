@@ -17,8 +17,8 @@ make test
 
 * Add a [DCO](https://developercertificate.org/) / `Signed-off-by` line in any commit message (`git commit --signoff`).
 
-* Branch from master and, if needed, rebase to the current master branch before submitting your pull request.
-  If it doesn't merge cleanly with master you will be asked to rebase your changes.
+* Branch from main and, if needed, rebase to the current main branch before submitting your pull request.
+  If it doesn't merge cleanly with main you will be asked to rebase your changes.
 
 * Commits should be small units of work with one topic. Each commit should be correct independently.
 

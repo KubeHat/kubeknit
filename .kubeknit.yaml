@@ -31,4 +31,4 @@ spec:
         $ kubectl kubeknit merge kubeconfig1 kubeconfig2 > merged
         $ kubectl kubeknit export ctx1 ctx2 -k k8s.yaml,k3s.yaml > extracted
 
-      More on https://github.com/KubeHat/kubeknit/blob/master/doc/USAGE.md#kubeknit
+      More on https://github.com/KubeHat/kubeknit/blob/main/doc/USAGE.md#kubeknit
