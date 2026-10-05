@@ -13,7 +13,7 @@
 # limitations under the License.
 
 OUTPUTDIR:=out
-ASSETS:=konfig-krew LICENSE
+ASSETS:=kubeknit-krew LICENSE
 
 %.sha256: %
 	sha256sum $< > $@
@@ -26,7 +26,7 @@ $(OUTPUTDIR)/bundle.tar: $(ASSETS) $(OUTPUTDIR)
 	tar cf $@ $(ASSETS)
 
 %-krew: %
-	sed "/cat <<'EOF'/,/^EOF/s:konfig:kubectl konfig:" $< > $@
+	sed "/cat <<'EOF'/,/^EOF/s:kubeknit:kubectl kubeknit:" $< > $@
 	chmod +x $@
 
 $(OUTPUTDIR):
@@ -34,11 +34,11 @@ $(OUTPUTDIR):
 
 .PHONY: test
 test:
-	cd test && bats konfig.bats
+	cd test && bats kubeknit.bats
 
 .PHONY: deploy
 deploy: out/bundle.tar.gz.sha256
 
 .PHONY: clean
 clean:
-	$(RM) -r -- $(OUTPUTDIR) konfig-krew
+	$(RM) -r -- $(OUTPUTDIR) kubeknit-krew

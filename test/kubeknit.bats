@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COMMAND="$BATS_TEST_DIRNAME/../konfig"
+COMMAND="$BATS_TEST_DIRNAME/../kubeknit"
 
 load common
 
@@ -24,28 +24,28 @@ load common
   run ${COMMAND} help
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "konfig helps to merge"* ]]
+  [[ "$output" = "kubeknit helps to merge"* ]]
 }
 
 @test "--help should not fail" {
   run ${COMMAND} --help
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "konfig helps to merge"* ]]
+  [[ "$output" = "kubeknit helps to merge"* ]]
 }
 
 @test "-h should not fail" {
   run ${COMMAND} -h
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "konfig helps to merge"* ]]
+  [[ "$output" = "kubeknit helps to merge"* ]]
 }
 
 @test "no arguments given" {
   run ${COMMAND}
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "konfig helps to merge"* ]]
+  [[ "$output" = "kubeknit helps to merge"* ]]
 }
 
 ####  MERGE
@@ -195,7 +195,7 @@ load common
 
 @test "import --save writes to KUBECONFIG regardless of XDG_CACHE_HOME" {
   use_config config1
-  export XDG_CACHE_HOME="$KONFIG_TEST_DIR/cache"
+  export XDG_CACHE_HOME="$KUBEKNIT_TEST_DIR/cache"
   mkdir -p "$XDG_CACHE_HOME"
   run ${COMMAND} import --save testdata/config-2
   echo "$output"
@@ -213,14 +213,14 @@ load common
 }
 
 @test "import --save writes to the first file in KUBECONFIG" {
-  cp testdata/config1 "$KONFIG_TEST_DIR/first"
-  cp testdata/config3 "$KONFIG_TEST_DIR/second"
-  export KUBECONFIG="$KONFIG_TEST_DIR/first:$KONFIG_TEST_DIR/second"
+  cp testdata/config1 "$KUBEKNIT_TEST_DIR/first"
+  cp testdata/config3 "$KUBEKNIT_TEST_DIR/second"
+  export KUBECONFIG="$KUBEKNIT_TEST_DIR/first:$KUBEKNIT_TEST_DIR/second"
   run ${COMMAND} import --save testdata/config-2
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ $(check_file 'testdata/config12-flat' "$KONFIG_TEST_DIR/first") = 'same' ]]
-  [[ $(check_file 'testdata/config3' "$KONFIG_TEST_DIR/second") = 'same' ]]
+  [[ $(check_file 'testdata/config12-flat' "$KUBEKNIT_TEST_DIR/first") = 'same' ]]
+  [[ $(check_file 'testdata/config3' "$KUBEKNIT_TEST_DIR/second") = 'same' ]]
 }
 
 @test "import flags may follow the config" {
@@ -251,28 +251,28 @@ load common
   [[ "$EUID" -ne 0 ]] || skip "root ignores file permissions"
   use_config config1
   local cfg="$(cd testdata && pwd -P)/config-2"
-  mkdir "$KONFIG_TEST_DIR/readonly"
-  chmod a-w "$KONFIG_TEST_DIR/readonly"
-  run bash -c "cd '$KONFIG_TEST_DIR/readonly' && ${COMMAND} import -s '$cfg'"
+  mkdir "$KUBEKNIT_TEST_DIR/readonly"
+  chmod a-w "$KUBEKNIT_TEST_DIR/readonly"
+  run bash -c "cd '$KUBEKNIT_TEST_DIR/readonly' && ${COMMAND} import -s '$cfg'"
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ $(check_kubeconfig 'testdata/config12-flat') = 'same' ]]
 }
 
 @test "import --save keeps a symlinked kubeconfig" {
-  cp testdata/config1 "$KONFIG_TEST_DIR/real-config"
-  ln -s "$KONFIG_TEST_DIR/real-config" "$KUBECONFIG"
+  cp testdata/config1 "$KUBEKNIT_TEST_DIR/real-config"
+  ln -s "$KUBEKNIT_TEST_DIR/real-config" "$KUBECONFIG"
   run ${COMMAND} import -s testdata/config-2
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ -L "$KUBECONFIG" ]]
-  [[ $(check_file 'testdata/config12-flat' "$KONFIG_TEST_DIR/real-config") = 'same' ]]
+  [[ $(check_file 'testdata/config12-flat' "$KUBEKNIT_TEST_DIR/real-config") = 'same' ]]
 }
 
 @test "import keeps existing entries and warns about conflicts" {
   use_config config1
-  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KONFIG_TEST_DIR/clash"
-  run ${COMMAND} import -s "$KONFIG_TEST_DIR/clash"
+  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KUBEKNIT_TEST_DIR/clash"
+  run ${COMMAND} import -s "$KUBEKNIT_TEST_DIR/clash"
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ "$output" = *'warning: context "context1" already exists'*'use --force to overwrite'* ]]
@@ -281,8 +281,8 @@ load common
 
 @test "import --force overwrites existing entries" {
   use_config config1
-  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KONFIG_TEST_DIR/clash"
-  run ${COMMAND} import -s --force "$KONFIG_TEST_DIR/clash"
+  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KUBEKNIT_TEST_DIR/clash"
+  run ${COMMAND} import -s --force "$KUBEKNIT_TEST_DIR/clash"
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ "$output" = *'warning: overwriting context "context1"'* ]]
@@ -548,13 +548,13 @@ load common
   run ${COMMAND} version
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "konfig v"* ]]
+  [[ "$output" = "kubeknit v"* ]]
 }
 
 @test "completion bash" {
   run ${COMMAND} completion bash
   [[ "$status" -eq 0 ]]
-  [[ "$output" = *"complete -o default -F _konfig konfig"* ]]
+  [[ "$output" = *"complete -o default -F _kubeknit kubeknit"* ]]
   bash -n <(echo "$output")
 }
 
@@ -567,7 +567,7 @@ load common
 @test "completion suggests contexts" {
   use_config config123
   run bash -c "source <(${COMMAND} completion bash)
-    COMP_WORDS=(konfig delete con); COMP_CWORD=2; _konfig; echo \"\${COMPREPLY[*]}\""
+    COMP_WORDS=(kubeknit delete con); COMP_CWORD=2; _kubeknit; echo \"\${COMPREPLY[*]}\""
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ "$output" = 'context1 context2 context3' ]]
@@ -582,12 +582,12 @@ load common
 
 @test "no temporary files are left behind" {
   use_config config1
-  export TMPDIR="$KONFIG_TEST_DIR/tmp"
+  export TMPDIR="$KUBEKNIT_TEST_DIR/tmp"
   mkdir "$TMPDIR"
   run ${COMMAND} import -s testdata/config-2
   [[ "$status" -eq 0 ]]
   run ${COMMAND} import -s /does/not/exist
   [[ "$status" -eq 1 ]]
   [[ -z "$(ls -A "$TMPDIR")" ]]
-  [[ -z "$(ls testdata | grep konfig_ || true)" ]]
+  [[ -z "$(ls testdata | grep kubeknit_ || true)" ]]
 }

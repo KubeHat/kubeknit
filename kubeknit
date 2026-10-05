@@ -18,7 +18,7 @@
 
 set -eEuo pipefail
 
-readonly KONFIG_VERSION="v0.1.0"
+readonly KUBEKNIT_VERSION="v0.1.0"
 
 # All temporary files live in this directory. It is created in $TMPDIR and
 # never in the current working directory, which may be read-only.
@@ -32,14 +32,14 @@ trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
-konfig helps to merge, split, import or delete kubeconfig files
+kubeknit helps to merge, split, import or delete kubeconfig files
 
 USAGE:
-  konfig merge [--preserve-structure,-p] <CONFIG>..
+  kubeknit merge [--preserve-structure,-p] <CONFIG>..
      Merge multiple kubeconfigs into one.
      -p  prevents flattening which will make the result less portable.
 
-  konfig import [--preserve-structure,-p] [--save,-s] [--force,-f] [--stdin,-i] <CONFIG>..
+  kubeknit import [--preserve-structure,-p] [--save,-s] [--force,-f] [--stdin,-i] <CONFIG>..
      Import the given configs into your kubeconfig. Your kubeconfig is the first
      file in the KUBECONFIG env var, or ~/.kube/config if KUBECONFIG is unset.
      -s  writes the result to your kubeconfig instead of printing it
@@ -47,45 +47,45 @@ USAGE:
      -i  import kubeconfig string from stdin (same as passing "-" as CONFIG)
      -p  prevents flattening; relative certificate paths are made absolute
 
-  konfig delete [--save,-s] [--context-only,-c] <CONTEXT>..
+  kubeknit delete [--save,-s] [--context-only,-c] <CONTEXT>..
      Delete the given contexts from your kubeconfig. Clusters and users that are
      no longer used by any remaining context are deleted as well.
      -s  writes the result to your kubeconfig instead of printing it
      -c  only deletes the contexts, but keeps their clusters and users
 
-  konfig split  <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
-  konfig export <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
+  kubeknit split  <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
+  kubeknit export <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
      Export/split off a minimal kubeconfig with the given contexts
       -k  may be repeated or contain a comma-delimited list of input configs.
           When omitted, export from the default kubeconfig.
 
-  konfig completion (bash|zsh)
+  kubeknit completion (bash|zsh)
      Print a shell completion script.
 
-  konfig version
-     Print the version of konfig.
+  kubeknit version
+     Print the version of kubeknit.
 
 EXAMPLES:
   Merge new-cfg with your current kubeconfig
-    $ konfig import new-cfg
+    $ kubeknit import new-cfg
   and save the result to ~/.kube/config
-    $ konfig import --save new-cfg
+    $ kubeknit import --save new-cfg
   CAVEAT: due to how shells work, the following will lose your current ~/.kube/config
-    WRONG $ konfig import new-cfg > ~/.kube/config
+    WRONG $ kubeknit import new-cfg > ~/.kube/config
 
   Remove context ctx1 together with its cluster and user from ~/.kube/config
-    $ konfig delete --save ctx1
+    $ kubeknit delete --save ctx1
 
   Export ctx1 and ctx2 into combined.yaml
-    $ konfig export -k ~/.kube/config -k k3s.yaml ctx1 ctx2 > combined.yaml
+    $ kubeknit export -k ~/.kube/config -k k3s.yaml ctx1 ctx2 > combined.yaml
 
   Merge two configs
-    $ konfig merge ~/.kube/config k3s.yaml > merged-and-flattened
+    $ kubeknit merge ~/.kube/config k3s.yaml > merged-and-flattened
     or
-    $ konfig merge -p ~/.kube/config k3s.yaml > merged-not-flattened
+    $ kubeknit merge -p ~/.kube/config k3s.yaml > merged-not-flattened
 
   Enable shell completion
-    $ source <(konfig completion bash)
+    $ source <(kubeknit completion bash)
 
 EOF
 }
@@ -108,7 +108,7 @@ completion() {
   # NOTE: use a delimiter other than EOF, so that the krew build does not
   # rewrite the function names below.
   cat <<'COMPLETION'
-_konfig_contexts() {
+_kubeknit_contexts() {
   local i cfgs=""
   for (( i = 2; i < COMP_CWORD; i++ )); do
     if [[ "${COMP_WORDS[i]}" == '-k' || "${COMP_WORDS[i]}" == '--kubeconfig' ]]; then
@@ -122,7 +122,7 @@ _konfig_contexts() {
   fi
 }
 
-_konfig() {
+_kubeknit() {
   local cur prev cmd
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -151,14 +151,14 @@ _konfig() {
       elif [[ "$cur" == -* ]]; then
         COMPREPLY=( $(compgen -W "--kubeconfig --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "$(_konfig_contexts)" -- "$cur") )
+        COMPREPLY=( $(compgen -W "$(_kubeknit_contexts)" -- "$cur") )
       fi
       ;;
     delete)
       if [[ "$cur" == -* ]]; then
         COMPREPLY=( $(compgen -W "--save --context-only --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "$(_konfig_contexts)" -- "$cur") )
+        COMPREPLY=( $(compgen -W "$(_kubeknit_contexts)" -- "$cur") )
       fi
       ;;
     completion)
@@ -167,7 +167,7 @@ _konfig() {
   esac
 }
 
-complete -o default -F _konfig konfig
+complete -o default -F _kubeknit kubeknit
 COMPLETION
 }
 
@@ -192,7 +192,7 @@ join_by() {
 }
 
 init_workdir() {
-  WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/konfig.XXXXXX")" \
+  WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/kubeknit.XXXXXX")" \
     || error "cannot create a temporary directory, check TMPDIR"
 }
 
@@ -671,8 +671,8 @@ export_contexts() {
 }
 
 main() {
-  if [[ -n "${KONFIG_KUBECTL:-}" ]]; then
-    KUBECTL="$KONFIG_KUBECTL"
+  if [[ -n "${KUBEKNIT_KUBECTL:-}" ]]; then
+    KUBECTL="$KUBEKNIT_KUBECTL"
   elif hash kubectl 2>/dev/null; then
     KUBECTL=kubectl
   elif hash kubectl.exe 2>/dev/null; then
@@ -692,7 +692,7 @@ main() {
     usage
     ;;
   '-v' | '--version' | 'version')
-    echo "konfig $KONFIG_VERSION"
+    echo "kubeknit $KUBEKNIT_VERSION"
     ;;
   'export'|'split')
     export_contexts "${@:2}"

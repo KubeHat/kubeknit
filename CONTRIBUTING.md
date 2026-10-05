@@ -1,5 +1,5 @@
 # Contributing
-`konfig` uses GitHub to manage reviews of pull requests.
+`kubeknit` uses GitHub to manage reviews of pull requests.
 
 * If you have a trivial fix or improvement, go ahead and create a pull request.
 
