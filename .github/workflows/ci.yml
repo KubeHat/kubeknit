@@ -49,8 +49,10 @@ jobs:
           out/bundle.tar.gz*
           kubeknit
 
+    # Only works once kubeknit is listed in krew-index. The first submission is
+    # a manual PR; afterwards set the repository variable KREW_INDEX_LISTED=true.
     - name: Create PR in krew-index
-      if: startsWith(github.ref, 'refs/tags/')
+      if: startsWith(github.ref, 'refs/tags/') && vars.KREW_INDEX_LISTED == 'true'
       uses: rajatjindal/krew-release-bot@v0.0.40
       with:
         krew_template_file: .kubeknit.yaml
