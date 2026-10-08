@@ -449,13 +449,15 @@ load common
 ####  ERRORS
 
 @test "no kubectl detected" {
-  OLDPATH="$PATH"
-  PATH=/bin
-  run ${COMMAND}
+  # /bin may contain kubectl (e.g. on GitHub runners), so build a PATH which
+  # only provides bash for the shebang
+  local bin="$KUBEKNIT_TEST_DIR/bin"
+  mkdir -p "$bin"
+  ln -s "$(command -v bash)" "$bin/bash"
+  run env -u KUBEKNIT_KUBECTL PATH="$bin" ${COMMAND}
   echo "$output"
   [[ "$status" -eq 1 ]]
   [[ "$output" = "kubectl is not installed" ]]
-  PATH="$OLDPATH"
 }
 
 @test "unknown subcommand" {
