@@ -1,4 +1,4 @@
-# kubectl knit
+# `kubectl-knit`
 
 ![Latest GitHub release](https://img.shields.io/github/v/release/KubeHat/kubectl-knit)
 ![GitHub workflow status](https://img.shields.io/github/actions/workflow/status/KubeHat/kubectl-knit/ci.yml)
