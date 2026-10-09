@@ -1,19 +1,5 @@
 #!/usr/bin/env bats
 
-# Copyright 2019 Cornelius Weig
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 COMMAND="$BATS_TEST_DIRNAME/../kubeknit"
 
 load common
@@ -104,6 +90,7 @@ load common
   run ${COMMAND} import --save testdata/config-2
   echo "$output"
   [[ "$status" -eq 0 ]]
+  [[ "$output" = *'imported 1 kubeconfig(s) into '*' ✅' ]]
   [[ $(check_kubeconfig 'testdata/config12-flat') = 'same' ]]
 }
 
@@ -275,7 +262,7 @@ load common
   run ${COMMAND} import -s "$KUBEKNIT_TEST_DIR/clash"
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = *'warning: context "context1" already exists'*'use --force to overwrite'* ]]
+  [[ "$output" = *'⚠️  warning: context "context1" already exists'*'use --force to overwrite'* ]]
   [[ $(kubeconfig_value "$KUBECONFIG" '{.contexts[?(@.name=="context1")].context.cluster}') = 'config-flat' ]]
 }
 
@@ -314,6 +301,8 @@ load common
   run ${COMMAND} delete context2
   echo "$output"
   [[ "$status" -eq 0 ]]
+  [[ "$output" = *'would delete context "context2"'* ]]
+  [[ "$output" = *'nothing was changed, use --save'* ]]
   [[ $(check_fixture 'testdata/config13-flat' "$(${COMMAND} delete context2 2>/dev/null)") = 'same' ]]
   [[ $(check_kubeconfig 'testdata/config123') = 'same' ]]
 }
@@ -323,9 +312,10 @@ load common
   run ${COMMAND} delete --save context2
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = *'deleted context "context2"'* ]]
-  [[ "$output" = *'deleted cluster "config-non-flat"'* ]]
-  [[ "$output" = *'deleted user "config-non-flat"'* ]]
+  [[ "$output" = *'deleted context "context2" ✅'* ]]
+  [[ "$output" = *'deleted cluster "config-non-flat" ✅'* ]]
+  [[ "$output" = *'deleted user "config-non-flat" ✅'* ]]
+  [[ "$output" != *'apiVersion'* ]]
   [[ $(check_kubeconfig 'testdata/config13-flat') = 'same' ]]
 }
 
@@ -382,7 +372,7 @@ load common
   run ${COMMAND} delete -s context2 nope
   echo "$output"
   [[ "$status" -eq 1 ]]
-  [[ "$output" = *'error: context "nope" not found'* ]]
+  [[ "$output" = *'🔴 error: context "nope" not found'* ]]
   [[ $(check_kubeconfig 'testdata/config123') = 'same' ]]
 }
 
@@ -457,7 +447,7 @@ load common
   run env -u KUBEKNIT_KUBECTL PATH="$bin" ${COMMAND}
   echo "$output"
   [[ "$status" -eq 1 ]]
-  [[ "$output" = "kubectl is not installed" ]]
+  [[ "$output" = "🔴 error: kubectl is not installed" ]]
 }
 
 @test "unknown subcommand" {

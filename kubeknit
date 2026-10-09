@@ -1,27 +1,12 @@
 #!/usr/bin/env bash
 
-# Copyright 2019 Cornelius Weig
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 [[ -n ${DEBUG:-} ]] && set -x
 
 set -eEuo pipefail
 
 readonly KUBEKNIT_VERSION="v0.1.0"
 
-# All temporary files live in this directory. It is created in $TMPDIR and
-# never in the current working directory, which may be read-only.
+# private temp directory in $TMPDIR, never in the (maybe read-only) working dir
 WORKDIR=""
 cleanup() {
   if [[ -n "$WORKDIR" ]]; then
@@ -50,7 +35,9 @@ USAGE:
   kubeknit delete [--save,-s] [--context-only,-c] <CONTEXT>..
      Delete the given contexts from your kubeconfig. Clusters and users that are
      no longer used by any remaining context are deleted as well.
-     -s  writes the result to your kubeconfig instead of printing it
+     Without -s, only shows what would be deleted (the resulting kubeconfig is
+     printed when stdout is redirected or piped).
+     -s  writes the result to your kubeconfig
      -c  only deletes the contexts, but keeps their clusters and users
 
   kubeknit split  <CONTEXT>.. [--kubeconfig,-k <CONFIG>]
@@ -105,8 +92,7 @@ completion() {
       ;;
   esac
 
-  # NOTE: use a delimiter other than EOF, so that the krew build does not
-  # rewrite the function names below.
+  # not EOF, so that "make deploy" does not rewrite the function names below
   cat <<'COMPLETION'
 _kubeknit_contexts() {
   local i cfgs=""
@@ -172,12 +158,12 @@ COMPLETION
 }
 
 error() {
-  echo "error: $*" >&2
+  echo "🔴 error: $*" >&2
   exit 1
 }
 
 warn() {
-  echo "warning: $*" >&2
+  echo "⚠️  warning: $*" >&2
 }
 
 info() {
@@ -197,9 +183,7 @@ init_workdir() {
 }
 
 # kubectl_out FILE ARG.. runs kubectl and writes its stdout to FILE.
-# The output is piped through cat, because sandboxed kubectl builds (e.g. snap)
-# may fail to write to a redirected stdout with
-# "error: write /dev/stdout: permission denied".
+# Piped through cat, as sandboxed kubectl (snap) can't write to redirected stdout.
 kubectl_out() {
   local out="$1"
   shift
@@ -221,8 +205,7 @@ view_merged() {
   KUBECONFIG="$(join_by ':' "$@")" kubectl_out "$out" config view "$mode" --merge
 }
 
-# check_readable CONFIG.. fails unless all CONFIGs can be read.
-# kubectl silently ignores missing files, so this check must be explicit.
+# check_readable CONFIG.. fails unless all CONFIGs can be read (kubectl ignores missing files)
 check_readable() {
   local f
   for f in "$@"; do
@@ -236,8 +219,7 @@ check_readable() {
   done
 }
 
-# target_kubeconfig prints the kubeconfig file which kubectl modifies:
-# the first entry of KUBECONFIG, or ~/.kube/config
+# target_kubeconfig prints the first file in KUBECONFIG, or ~/.kube/config
 target_kubeconfig() {
   local -a entries=()
   local entry
@@ -253,8 +235,8 @@ target_kubeconfig() {
   echo "$HOME/.kube/config"
 }
 
-# save_to SRC DEST overwrites DEST with SRC. Writing in-place keeps symlinks and
-# file permissions intact. On failure, the original content is restored.
+# save_to SRC DEST overwrites DEST in place (keeps symlinks and permissions),
+# restoring it on failure.
 save_to() {
   local src="$1" dest="$2"
   mkdir -p "$(dirname "$dest")" || error "cannot create directory for \"$dest\""
@@ -279,8 +261,7 @@ is_relative_path() {
   [[ -n "$1" && "$1" != /* ]]
 }
 
-# absolutize_paths CONFIG DIR rewrites relative certificate paths in CONFIG, so
-# that they still resolve relative to DIR after CONFIG was moved elsewhere.
+# absolutize_paths CONFIG DIR makes relative certificate paths in CONFIG absolute to DIR
 absolutize_paths() {
   local cfg="$1" dir="$2" name path
   local paths="$WORKDIR/paths"
@@ -310,14 +291,12 @@ absolutize_paths() {
   done < "$paths"
 }
 
-# list_entries CONFIG OUT writes one line "kind<TAB>name<TAB>data" per
-# cluster, user and context in CONFIG to OUT
+# list_entries CONFIG OUT writes "kind<TAB>name<TAB>data" per entry of CONFIG to OUT
 list_entries() {
   kubectl_out "$2" --kubeconfig "$1" config view --raw -o 'jsonpath={range .clusters[*]}cluster{"\t"}{.name}{"\t"}{.cluster}{"\n"}{end}{range .users[*]}user{"\t"}{.name}{"\t"}{.user}{"\n"}{end}{range .contexts[*]}context{"\t"}{.name}{"\t"}{.context}{"\n"}{end}'
 }
 
-# report_conflicts BASE IMPORTED TARGET FORCE warns about entries which exist in
-# both BASE and IMPORTED with the same name, but with different data.
+# report_conflicts BASE IMPORTED TARGET FORCE warns about same-named entries with different data
 report_conflicts() {
   local base="$1" imported="$2" target="$3" force="$4" kind name
 
@@ -481,17 +460,18 @@ import_ctx() {
 
   if [[ -n "$save" ]]; then
     save_to "$WORKDIR/result" "$target"
-    info "imported ${#prepared[@]} kubeconfig(s) into $target"
+    info "imported ${#prepared[@]} kubeconfig(s) into $target ✅"
   else
     cat "$WORKDIR/result"
   fi
 }
 
 delete_contexts() {
-  local save="" context_only="" target result ctx cluster user current_context
+  local save="" context_only="" target result ctx cluster user current_context entry
   local -a ctxs=()
   local -a clusters=()
   local -a users=()
+  local -a deleted=()
 
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -551,7 +531,7 @@ delete_contexts() {
     users+=( "$user" )
 
     kubectl_quiet --kubeconfig "$result" config delete-context "$ctx"
-    info "deleted context \"$ctx\""
+    deleted+=( "context \"$ctx\"" )
     if [[ "$ctx" == "$current_context" ]]; then
       kubectl_quiet --kubeconfig "$result" config unset current-context
       warn "\"$ctx\" was the current context, select a new one with \"kubectl config use-context\""
@@ -565,13 +545,23 @@ delete_contexts() {
 
   if [[ -n "$save" ]]; then
     save_to "$result" "$target"
+    for entry in "${deleted[@]}"; do
+      info "deleted $entry ✅"
+    done
   else
-    cat "$result"
+    for entry in "${deleted[@]}"; do
+      info "would delete $entry"
+    done
+    info "nothing was changed, use --save to delete from $target"
+    # print the resulting kubeconfig only when it is redirected or piped
+    if [[ ! -t 1 ]]; then
+      cat "$result"
+    fi
   fi
 }
 
-# delete_orphans CONFIG KIND NAME.. deletes the clusters or users NAME from
-# CONFIG, unless they are still used by a context.
+# delete_orphans CONFIG KIND NAME.. deletes unused clusters or users NAME from CONFIG
+# and appends them to the caller's "deleted" array.
 delete_orphans() {
   local cfg="$1" kind="$2" name column
   shift 2
@@ -602,7 +592,7 @@ delete_orphans() {
     # do not delete the same entry twice
     printf '%s\n' "$name" | grep -vxF -f - "$WORKDIR/names" > "$WORKDIR/names.new" || true
     mv "$WORKDIR/names.new" "$WORKDIR/names"
-    info "deleted $kind \"$name\""
+    deleted+=( "$kind \"$name\"" )
   done
 }
 
@@ -678,8 +668,7 @@ main() {
   elif hash kubectl.exe 2>/dev/null; then
     KUBECTL=kubectl.exe
   else
-    echo >&2 "kubectl is not installed"
-    exit 1
+    error "kubectl is not installed"
   fi
 
   if [[ "$#" -eq 0 ]]; then

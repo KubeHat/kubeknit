@@ -1,36 +1,18 @@
 # Contributing
-`kubeknit` uses GitHub to manage reviews of pull requests.
 
-* If you have a trivial fix or improvement, go ahead and create a pull request.
+Pull requests are welcome. Add tests for fixed bugs and new features, and sign off your commits
+(`git commit --signoff`, see [DCO](https://developercertificate.org/)).
 
-* Code must be properly formatted
+## Testing
 
-## Building & Testing
+Install [bats](https://github.com/bats-core/bats-core) and kubectl, then run `make test`.
+See [test/testdata](test/testdata/README.md) for the fixtures.
 
-This repository uses [bats](https://github.com/sstephenson/bats) for testing.
-To run the tests, install `bats`, then
-```bash
-make test
-```
+## Releasing
 
-## Pull Request Checklist
-
-* Add a [DCO](https://developercertificate.org/) / `Signed-off-by` line in any commit message (`git commit --signoff`).
-
-* Branch from main and, if needed, rebase to the current main branch before submitting your pull request.
-  If it doesn't merge cleanly with main you will be asked to rebase your changes.
-
-* Commits should be small units of work with one topic. Each commit should be correct independently.
-
-* Add tests relevant to the fixed bug or new feature.
-
-## Releases
-
-This is a checklist for new releases:
-
-0. Create release notes in `doc/releases`
-0. Update usage instructions, if applicable
-0. Create a new tag via `hack/make_tag.sh`
-0. Push the tag to GitHub `git push --tags`
-0. Create new release on GitHub Releases and upload artifacts
-0. Update [krew-index](https://github.com/GoogleContainerTools/krew-index)
+1. Add release notes in `doc/releases` and set the version in `kubeknit`.
+2. Push a tag, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
+   CI runs `make deploy` and creates the GitHub release.
+3. Test the release, then submit it to [krew-index](https://github.com/kubernetes-sigs/krew-index).
+   After the first submission is merged, set the repository variable `KREW_INDEX_LISTED=true`,
+   so that CI opens krew-index PRs for later tags.
