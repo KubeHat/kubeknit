@@ -17,18 +17,21 @@ spec:
           - key: os
             operator: In
             values: ["darwin", "linux"]
-  shortDescription: Merge, split, import or delete kubeconfig files
+  shortDescription: Import, delete, merge and export kubeconfig files
   homepage: https://github.com/KubeHat/kubeknit
   description: |+2
 
-      kubeknit helps to merge, split, import or delete kubeconfig files
+      Import clusters into your kubeconfig, delete contexts together with their
+      unused clusters and users, merge kubeconfig files, or export a minimal
+      kubeconfig for some contexts.
 
-      This is a convenience wrapper around the `kubectl config view` command.
+      import and delete only change your kubeconfig with --save, otherwise they
+      show what would change.
 
       Usage:
-        $ kubectl kubeknit import --save new-cfg
-        $ kubectl kubeknit delete --save ctx1
-        $ kubectl kubeknit merge kubeconfig1 kubeconfig2 > merged
-        $ kubectl kubeknit export ctx1 ctx2 -k k8s.yaml,k3s.yaml > extracted
+        $ kubectl kubeknit import --save new-cluster.yaml
+        $ kubectl kubeknit delete --save old-context
+        $ kubectl kubeknit merge config1 config2 > merged.yaml
+        $ kubectl kubeknit export dev prod > dev-prod.yaml
 
       More on https://github.com/KubeHat/kubeknit#usage

@@ -4,7 +4,7 @@
 ![GitHub workflow status](https://img.shields.io/github/actions/workflow/status/KubeHat/kubeknit/ci.yml)
 ![GitHub stars](https://img.shields.io/github/stars/KubeHat/kubeknit?label=github%20stars)
 
-Import, delete, merge and export kubeconfig files. A single bash script around `kubectl config`.
+Import, delete, merge and export kubeconfig files. Only needs bash and kubectl.
 
 kubeknit is a maintained fork of [konfig](https://github.com/corneliusweig/konfig) by Cornelius Weig,
 see [doc/releases](doc/releases) for the changes.
