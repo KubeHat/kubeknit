@@ -15,5 +15,3 @@ jobs:
 
     - name: Create PR in krew-index
       uses: rajatjindal/krew-release-bot@v0.0.51
-      with:
-        krew_template_file: .kubeknit.yaml

@@ -10,7 +10,7 @@ See [test/testdata](test/testdata/README.md) for the fixtures.
 
 ## Releasing
 
-1. Add release notes in `doc/releases` and set the version in `kubeknit`.
+1. Add release notes in `doc/releases` and set the version in `kubectl-knit`.
 2. Push a tag, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
    CI runs `make deploy` and creates the GitHub release.
 3. Test the release, then submit it to [krew-index](https://github.com/kubernetes-sigs/krew-index).

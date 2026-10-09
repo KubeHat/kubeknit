@@ -1,14 +1,14 @@
 apiVersion: krew.googlecontainertools.github.com/v1alpha2
 kind: Plugin
 metadata:
-  name: kubeknit
+  name: knit
 spec:
   version: "{{ .TagName }}"
   platforms:
-    - {{addURIAndSha "https://github.com/KubeHat/kubeknit/releases/download/{{ .TagName }}/bundle.tar.gz" .TagName | indent 6 }}
-      bin: kubeknit-krew
+    - {{addURIAndSha "https://github.com/KubeHat/kubectl-knit/releases/download/{{ .TagName }}/bundle.tar.gz" .TagName | indent 6 }}
+      bin: kubectl-knit
       files:
-        - from: ./kubeknit-krew
+        - from: ./kubectl-knit
           to: .
         - from: LICENSE
           to: .
@@ -18,7 +18,7 @@ spec:
             operator: In
             values: ["darwin", "linux"]
   shortDescription: Import, delete, merge and export kubeconfig files
-  homepage: https://github.com/KubeHat/kubeknit
+  homepage: https://github.com/KubeHat/kubectl-knit
   description: |+2
 
       Import clusters into your kubeconfig, delete contexts together with their
@@ -29,9 +29,9 @@ spec:
       show what would change.
 
       Usage:
-        $ kubectl kubeknit import --save new-cluster.yaml
-        $ kubectl kubeknit delete --save old-context
-        $ kubectl kubeknit merge config1 config2 > merged.yaml
-        $ kubectl kubeknit export dev prod > dev-prod.yaml
+        $ kubectl knit import --save new-cluster.yaml
+        $ kubectl knit delete --save old-context
+        $ kubectl knit merge config1 config2 > merged.yaml
+        $ kubectl knit export dev prod > dev-prod.yaml
 
-      More on https://github.com/KubeHat/kubeknit#usage
+      More on https://github.com/KubeHat/kubectl-knit#usage

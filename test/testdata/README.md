@@ -1,6 +1,6 @@
 # Test data
 
-Kubeconfig fixtures used by `test/kubeknit.bats`. All certificates, keys and
+Kubeconfig fixtures used by `test/knit.bats`. All certificates, keys and
 passwords are dummies.
 
 ## Input configs
@@ -46,7 +46,7 @@ make test
 The tests never touch your real kubeconfig: each one runs with `HOME` and
 `KUBECONFIG` pointing to a temporary directory.
 
-## Trying kubeknit by hand
+## Trying it by hand
 
 Never use `--save` with a fixture as your kubeconfig, it would overwrite the
 fixture. Work on a copy instead; `test/kubeconfig` is git-ignored:
@@ -56,12 +56,12 @@ cd test
 cp testdata/config1 kubeconfig
 export KUBECONFIG=$PWD/kubeconfig
 
-../kubeknit import testdata/config23              # preview, nothing is changed
-../kubeknit import --save testdata/config23       # imported 1 kubeconfig(s) into ... ✅
-../kubeknit import --save testdata/config123      # ⚠️  warning: cluster "config-non-flat" already exists ...
-../kubeknit delete context2                       # would delete ...
-../kubeknit delete --save context2                # deleted context "context2" ✅
-../kubeknit export context1 context3
+../kubectl-knit import testdata/config23              # preview, nothing is changed
+../kubectl-knit import --save testdata/config23       # imported 1 kubeconfig(s) into ... ✅
+../kubectl-knit import --save testdata/config123      # ⚠️  warning: cluster "config-non-flat" already exists ...
+../kubectl-knit delete context2                       # would delete ...
+../kubectl-knit delete --save context2                # deleted context "context2" ✅
+../kubectl-knit export context1 context3
 
 cp testdata/config1 kubeconfig                    # start over
 unset KUBECONFIG                                  # back to your real kubeconfig

@@ -2,18 +2,18 @@
 
 # bats setup function
 setup() {
-  export KUBEKNIT_TEST_DIR="$(mktemp -d)"
-  export KUBECONFIG="${KUBEKNIT_TEST_DIR}/config"
+  export KNIT_TEST_DIR="$(mktemp -d)"
+  export KUBECONFIG="${KNIT_TEST_DIR}/config"
   # never touch the real ~/.kube/config
-  export HOME="${KUBEKNIT_TEST_DIR}/home"
+  export HOME="${KNIT_TEST_DIR}/home"
   mkdir -p "$HOME"
   unset XDG_CACHE_HOME XDG_CONFIG_HOME
 }
 
 # bats teardown function
 teardown() {
-  chmod -R u+rwx "$KUBEKNIT_TEST_DIR"
-  rm -rf "$KUBEKNIT_TEST_DIR"
+  chmod -R u+rwx "$KNIT_TEST_DIR"
+  rm -rf "$KNIT_TEST_DIR"
 }
 
 use_config() {
@@ -43,8 +43,8 @@ check_fixture() {
 absolute_fixture() {
   local testdata
   testdata="$(cd "$BATS_TEST_DIRNAME/testdata" && pwd -P)"
-  sed "s|: credentials/|: ${testdata}/credentials/|" "$BATS_TEST_DIRNAME/testdata/$1" > "$KUBEKNIT_TEST_DIR/$1.abs"
-  echo "$KUBEKNIT_TEST_DIR/$1.abs"
+  sed "s|: credentials/|: ${testdata}/credentials/|" "$BATS_TEST_DIRNAME/testdata/$1" > "$KNIT_TEST_DIR/$1.abs"
+  echo "$KNIT_TEST_DIR/$1.abs"
 }
 
 # context_names CONFIG prints the context names of CONFIG, separated by spaces

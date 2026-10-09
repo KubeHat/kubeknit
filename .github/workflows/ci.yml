@@ -1,4 +1,4 @@
-name: kubeknit CI
+name: CI
 on:
   push:
     branches:
@@ -50,5 +50,5 @@ jobs:
         body_path: doc/releases/${{ github.ref_name }}.md
         files: |
           out/bundle.tar.gz*
-          kubeknit
+          kubectl-knit
 

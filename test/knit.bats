@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-COMMAND="$BATS_TEST_DIRNAME/../kubeknit"
+COMMAND="$BATS_TEST_DIRNAME/../kubectl-knit"
 
 load common
 
@@ -10,28 +10,28 @@ load common
   run ${COMMAND} help
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "kubeknit helps to merge"* ]]
+  [[ "$output" = "kubectl knit imports, deletes"* ]]
 }
 
 @test "--help should not fail" {
   run ${COMMAND} --help
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "kubeknit helps to merge"* ]]
+  [[ "$output" = "kubectl knit imports, deletes"* ]]
 }
 
 @test "-h should not fail" {
   run ${COMMAND} -h
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "kubeknit helps to merge"* ]]
+  [[ "$output" = "kubectl knit imports, deletes"* ]]
 }
 
 @test "no arguments given" {
   run ${COMMAND}
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "kubeknit helps to merge"* ]]
+  [[ "$output" = "kubectl knit imports, deletes"* ]]
 }
 
 ####  MERGE
@@ -182,7 +182,7 @@ load common
 
 @test "import --save writes to KUBECONFIG regardless of XDG_CACHE_HOME" {
   use_config config1
-  export XDG_CACHE_HOME="$KUBEKNIT_TEST_DIR/cache"
+  export XDG_CACHE_HOME="$KNIT_TEST_DIR/cache"
   mkdir -p "$XDG_CACHE_HOME"
   run ${COMMAND} import --save testdata/config-2
   echo "$output"
@@ -200,14 +200,14 @@ load common
 }
 
 @test "import --save writes to the first file in KUBECONFIG" {
-  cp testdata/config1 "$KUBEKNIT_TEST_DIR/first"
-  cp testdata/config3 "$KUBEKNIT_TEST_DIR/second"
-  export KUBECONFIG="$KUBEKNIT_TEST_DIR/first:$KUBEKNIT_TEST_DIR/second"
+  cp testdata/config1 "$KNIT_TEST_DIR/first"
+  cp testdata/config3 "$KNIT_TEST_DIR/second"
+  export KUBECONFIG="$KNIT_TEST_DIR/first:$KNIT_TEST_DIR/second"
   run ${COMMAND} import --save testdata/config-2
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ $(check_file 'testdata/config12-flat' "$KUBEKNIT_TEST_DIR/first") = 'same' ]]
-  [[ $(check_file 'testdata/config3' "$KUBEKNIT_TEST_DIR/second") = 'same' ]]
+  [[ $(check_file 'testdata/config12-flat' "$KNIT_TEST_DIR/first") = 'same' ]]
+  [[ $(check_file 'testdata/config3' "$KNIT_TEST_DIR/second") = 'same' ]]
 }
 
 @test "import flags may follow the config" {
@@ -238,28 +238,28 @@ load common
   [[ "$EUID" -ne 0 ]] || skip "root ignores file permissions"
   use_config config1
   local cfg="$(cd testdata && pwd -P)/config-2"
-  mkdir "$KUBEKNIT_TEST_DIR/readonly"
-  chmod a-w "$KUBEKNIT_TEST_DIR/readonly"
-  run bash -c "cd '$KUBEKNIT_TEST_DIR/readonly' && ${COMMAND} import -s '$cfg'"
+  mkdir "$KNIT_TEST_DIR/readonly"
+  chmod a-w "$KNIT_TEST_DIR/readonly"
+  run bash -c "cd '$KNIT_TEST_DIR/readonly' && ${COMMAND} import -s '$cfg'"
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ $(check_kubeconfig 'testdata/config12-flat') = 'same' ]]
 }
 
 @test "import --save keeps a symlinked kubeconfig" {
-  cp testdata/config1 "$KUBEKNIT_TEST_DIR/real-config"
-  ln -s "$KUBEKNIT_TEST_DIR/real-config" "$KUBECONFIG"
+  cp testdata/config1 "$KNIT_TEST_DIR/real-config"
+  ln -s "$KNIT_TEST_DIR/real-config" "$KUBECONFIG"
   run ${COMMAND} import -s testdata/config-2
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ -L "$KUBECONFIG" ]]
-  [[ $(check_file 'testdata/config12-flat' "$KUBEKNIT_TEST_DIR/real-config") = 'same' ]]
+  [[ $(check_file 'testdata/config12-flat' "$KNIT_TEST_DIR/real-config") = 'same' ]]
 }
 
 @test "import keeps existing entries and warns about conflicts" {
   use_config config1
-  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KUBEKNIT_TEST_DIR/clash"
-  run ${COMMAND} import -s "$KUBEKNIT_TEST_DIR/clash"
+  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KNIT_TEST_DIR/clash"
+  run ${COMMAND} import -s "$KNIT_TEST_DIR/clash"
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ "$output" = *'⚠️  warning: context "context1" already exists'*'use --force to overwrite'* ]]
@@ -268,8 +268,8 @@ load common
 
 @test "import --force overwrites existing entries" {
   use_config config1
-  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KUBEKNIT_TEST_DIR/clash"
-  run ${COMMAND} import -s --force "$KUBEKNIT_TEST_DIR/clash"
+  sed 's/context2/context1/' "$(absolute_fixture config-2)" > "$KNIT_TEST_DIR/clash"
+  run ${COMMAND} import -s --force "$KNIT_TEST_DIR/clash"
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ "$output" = *'warning: overwriting context "context1"'* ]]
@@ -441,10 +441,10 @@ load common
 @test "no kubectl detected" {
   # /bin may contain kubectl (e.g. on GitHub runners), so build a PATH which
   # only provides bash for the shebang
-  local bin="$KUBEKNIT_TEST_DIR/bin"
+  local bin="$KNIT_TEST_DIR/bin"
   mkdir -p "$bin"
   ln -s "$(command -v bash)" "$bin/bash"
-  run env -u KUBEKNIT_KUBECTL PATH="$bin" ${COMMAND}
+  run env -u KNIT_KUBECTL PATH="$bin" ${COMMAND}
   echo "$output"
   [[ "$status" -eq 1 ]]
   [[ "$output" = "🔴 error: kubectl is not installed" ]]
@@ -540,13 +540,13 @@ load common
   run ${COMMAND} version
   echo "$output"
   [[ "$status" -eq 0 ]]
-  [[ "$output" = "kubeknit v"* ]]
+  [[ "$output" = "kubectl-knit v"* ]]
 }
 
 @test "completion bash" {
   run ${COMMAND} completion bash
   [[ "$status" -eq 0 ]]
-  [[ "$output" = *"complete -o default -F _kubeknit kubeknit"* ]]
+  [[ "$output" = *"complete -o default -F _kubectl_knit kubectl-knit"* ]]
   bash -n <(echo "$output")
 }
 
@@ -559,7 +559,7 @@ load common
 @test "completion suggests contexts" {
   use_config config123
   run bash -c "source <(${COMMAND} completion bash)
-    COMP_WORDS=(kubeknit delete con); COMP_CWORD=2; _kubeknit; echo \"\${COMPREPLY[*]}\""
+    COMP_WORDS=(kubectl-knit delete con); COMP_CWORD=2; _kubectl_knit; echo \"\${COMPREPLY[*]}\""
   echo "$output"
   [[ "$status" -eq 0 ]]
   [[ "$output" = 'context1 context2 context3' ]]
@@ -574,12 +574,12 @@ load common
 
 @test "no temporary files are left behind" {
   use_config config1
-  export TMPDIR="$KUBEKNIT_TEST_DIR/tmp"
+  export TMPDIR="$KNIT_TEST_DIR/tmp"
   mkdir "$TMPDIR"
   run ${COMMAND} import -s testdata/config-2
   [[ "$status" -eq 0 ]]
   run ${COMMAND} import -s /does/not/exist
   [[ "$status" -eq 1 ]]
   [[ -z "$(ls -A "$TMPDIR")" ]]
-  [[ -z "$(ls testdata | grep kubeknit_ || true)" ]]
+  [[ -z "$(ls testdata | grep kubectl-knit || true)" ]]
 }
