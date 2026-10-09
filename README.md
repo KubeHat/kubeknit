@@ -1,8 +1,8 @@
 # `kubeknit`
 
-![Latest GitHub release](https://img.shields.io/github/release/KubeHat/kubeknit.svg)
+![Latest GitHub release](https://img.shields.io/github/v/release/KubeHat/kubeknit)
 ![GitHub workflow status](https://img.shields.io/github/actions/workflow/status/KubeHat/kubeknit/ci.yml)
-![GitHub stars](https://img.shields.io/github/stars/KubeHat/kubeknit.svg?label=github%20stars)
+![GitHub stars](https://img.shields.io/github/stars/KubeHat/kubeknit?label=github%20stars)
 
 Import, delete, merge and export kubeconfig files. A single bash script around `kubectl config`.
 
