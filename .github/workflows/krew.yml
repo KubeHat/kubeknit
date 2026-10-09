@@ -1,0 +1,19 @@
+name: krew-index
+on:
+  release:
+    types: [published]
+
+jobs:
+  krew:
+    # The first krew-index submission is a manual PR. Once it is merged, set
+    # the repository variable KREW_INDEX_LISTED=true.
+    if: vars.KREW_INDEX_LISTED == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Check out repo
+      uses: actions/checkout@v7
+
+    - name: Create PR in krew-index
+      uses: rajatjindal/krew-release-bot@v0.0.51
+      with:
+        krew_template_file: .kubeknit.yaml
